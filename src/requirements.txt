@@ -1,0 +1,10 @@
+torch
+torchvision
+torchaudio
+transformers
+diffusers
+pillow
+reportlab
+bitsandbytes
+fastapi
+uvicorn
