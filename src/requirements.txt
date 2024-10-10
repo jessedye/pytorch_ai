@@ -10,3 +10,9 @@ reportlab==4.2.5
 bitsandbytes==0.44.1
 fastapi==0.115.0
 uvicorn==0.31.0
+
+# Add BlipProcessor for image-to-text processing
+transformers[vision]==4.45.2
+
+# Optional: For large models and inference optimizations
+accelerate==0.21.0

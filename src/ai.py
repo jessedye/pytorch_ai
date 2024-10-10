@@ -1,17 +1,18 @@
 import torch
 from fastapi import FastAPI
 from pydantic import BaseModel
-from transformers import AutoModelForCausalLM, AutoTokenizer
+from transformers import AutoModelForCausalLM, AutoTokenizer, BlipProcessor
 from diffusers import StableDiffusionPipeline
 import os
 import uuid
+
 app = FastAPI()
 
 # Model names
-model_name = "EleutherAI/gpt-j-6B"
+model_name = "meta-llama/Llama-3.2-11B-Vision"
 stable_diffusion_model_name = "CompVis/stable-diffusion-v1-4"
 
-# Device configuration
+# Device configuration - Use 'bfloat16' or 'float16' for efficiency
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 # Initialize models and tokenizer variables
@@ -19,13 +20,17 @@ model = None
 tokenizer = None
 pipe = None
 
-# Function to load GPT-J model and tokenizer
-def load_gptj_model():
+# Function to load LLaMA-3.2-11B-Vision model and tokenizer
+def load_llama_vision_model():
     global model, tokenizer
     if model is None or tokenizer is None:
-        print("Loading GPT-J model and tokenizer...")
+        print("Loading LLaMA-3.2-11B-Vision model and tokenizer...")
         tokenizer = AutoTokenizer.from_pretrained(model_name)
-        model = AutoModelForCausalLM.from_pretrained(model_name).to(device)
+        model = AutoModelForCausalLM.from_pretrained(
+            model_name, 
+            torch_dtype=torch.bfloat16,  # Use bfloat16 for reduced memory usage
+            device_map="auto"  # Automatically handle multi-GPU setup
+        ).to(device)
 
         # Add a proper pad token if it's not available
         if tokenizer.pad_token is None:
@@ -38,7 +43,8 @@ def load_stable_diffusion():
     if pipe is None:
         print("Loading Stable Diffusion pipeline...")
         pipe = StableDiffusionPipeline.from_pretrained(
-            stable_diffusion_model_name, torch_dtype=torch.float16  # Use FP16 for speed and memory efficiency
+            stable_diffusion_model_name, 
+            torch_dtype=torch.float16  # Use FP16 for speed and memory efficiency
         ).to(device)
 
 # Define input model for FastAPI
@@ -48,8 +54,8 @@ class PromptRequest(BaseModel):
 # Event handler to load models on startup
 @app.on_event("startup")
 async def startup_event():
-    load_gptj_model()         # Load GPT-J model and tokenizer at startup
-    load_stable_diffusion()   # Load Stable Diffusion model at startup
+    load_llama_vision_model()     # Load LLaMA-3.2-11B-Vision model and tokenizer at startup
+    load_stable_diffusion()       # Load Stable Diffusion model at startup
     print("Models loaded successfully at startup.")
 
 # Define the generate endpoint for text generation
@@ -61,7 +67,7 @@ async def generate_text(request: PromptRequest):
 
     outputs = model.generate(
         inputs['input_ids'],
-        max_new_tokens=20,      # Generate up to 200 new tokens
+        max_new_tokens=20,      # Generate up to 20 new tokens
         pad_token_id=tokenizer.pad_token_id,
         do_sample=True,
         temperature=0.3,         # Randomness for creative outputs
@@ -108,3 +114,15 @@ async def generate_image(request: PromptRequest):
     image.save(image_path)
 
     return {"image_path": image_path}
+
+# Define the endpoint for image-to-text generation using LLaMA Vision
+@app.post("/generate_image_to_text/")
+async def generate_image_to_text(request: PromptRequest):
+    processor = BlipProcessor.from_pretrained(model_name)
+    inputs = processor(request.prompt, return_tensors="pt").to(device)
+
+    # Generate text from the image input
+    outputs = model.generate(**inputs)
+    response_text = processor.decode(outputs[0], skip_special_tokens=True)
+
+    return {"response": response_text}
