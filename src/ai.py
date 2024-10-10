@@ -5,6 +5,17 @@ from transformers import AutoModelForCausalLM, AutoTokenizer, BlipProcessor
 from diffusers import StableDiffusionPipeline
 import os
 import uuid
+import time
+from huggingface_hub import login
+
+# Fetch the token from the environment variable
+hf_token = os.getenv("HUGGINGFACE_TOKEN")
+
+if hf_token:
+    login(hf_token)
+else:
+    raise EnvironmentError("HUGGINGFACE_TOKEN is not set in the environment.")
+
 
 app = FastAPI()
 
@@ -58,6 +69,23 @@ async def startup_event():
     load_stable_diffusion()       # Load Stable Diffusion model at startup
     print("Models loaded successfully at startup.")
 
+# Function to generate response following OpenAI JSON format
+def format_openai_response(generated_text, model_name):
+    return {
+        "id": str(uuid.uuid4()),
+        "object": "text_completion",
+        "created": int(time.time()),
+        "model": model_name,
+        "choices": [
+            {
+                "text": generated_text,
+                "index": 0,
+                "logprobs": None,
+                "finish_reason": "length"
+            }
+        ]
+    }
+
 # Define the generate endpoint for text generation
 @app.post("/direct/")
 async def generate_text(request: PromptRequest):
@@ -77,7 +105,7 @@ async def generate_text(request: PromptRequest):
     )
 
     response_text = tokenizer.decode(outputs[0], skip_special_tokens=True)
-    return {"response": response_text}
+    return format_openai_response(response_text, model_name)
 
 # POST endpoint for more creative responses
 @app.post("/creative/")
@@ -98,7 +126,7 @@ async def generate_creative_text(request: PromptRequest):
     )
 
     response_text = tokenizer.decode(outputs[0], skip_special_tokens=True)
-    return {"response": response_text}
+    return format_openai_response(response_text, model_name)
 
 # Define the endpoint for image generation using Stable Diffusion
 @app.post("/generate_image/")
@@ -113,7 +141,13 @@ async def generate_image(request: PromptRequest):
     # Save the image to the generated path
     image.save(image_path)
 
-    return {"image_path": image_path}
+    return {
+        "id": str(uuid.uuid4()),
+        "object": "image_generation",
+        "created": int(time.time()),
+        "model": stable_diffusion_model_name,
+        "image_path": image_path
+    }
 
 # Define the endpoint for image-to-text generation using LLaMA Vision
 @app.post("/generate_image_to_text/")
@@ -125,4 +159,4 @@ async def generate_image_to_text(request: PromptRequest):
     outputs = model.generate(**inputs)
     response_text = processor.decode(outputs[0], skip_special_tokens=True)
 
-    return {"response": response_text}
+    return format_openai_response(response_text, model_name)

@@ -1,18 +1,14 @@
+setuptools>=75.0.0
 --extra-index-url https://download.pytorch.org/whl/cu118
 torch==2.2.1+cu118
 torchvision==0.17.1+cu118
 torchaudio==2.2.1+cu118
-numpy<2.0
-transformers==4.45.2
+numpy==1.25.2
+transformers[vision]==4.45.2
 diffusers==0.30.3
 pillow==10.4.0
 reportlab==4.2.5
 bitsandbytes==0.44.1
 fastapi==0.115.0
 uvicorn==0.31.0
-
-# Add BlipProcessor for image-to-text processing
-transformers[vision]==4.45.2
-
-# Optional: For large models and inference optimizations
-accelerate==0.21.0
+accelerate==0.23.0

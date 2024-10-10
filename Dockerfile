@@ -1,5 +1,5 @@
-# Use a Debian-based image for Python (slim version for smaller size)
-FROM python:3.12.5-slim
+# Use a python package for full support 3.12 breaks distutils
+FROM python:3.11
 
 # Create app directory
 WORKDIR /app
@@ -23,7 +23,7 @@ RUN apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements.txt
-COPY src/requirements.txt ./
+COPY src/pyproject.toml src/requirements.txt ./
 
 # Install the rest of the dependencies
 RUN pip install --no-cache-dir -r requirements.txt
