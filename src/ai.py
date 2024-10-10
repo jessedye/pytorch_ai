@@ -7,6 +7,7 @@ import os
 import uuid
 import time
 from huggingface_hub import login
+import asyncio
 
 # Fetch the token from the environment variable
 hf_token = os.getenv("HUGGINGFACE_TOKEN")
@@ -15,7 +16,6 @@ if hf_token:
     login(hf_token)
 else:
     raise EnvironmentError("HUGGINGFACE_TOKEN is not set in the environment.")
-
 
 app = FastAPI()
 
@@ -31,7 +31,7 @@ model = None
 tokenizer = None
 pipe = None
 
-# Function to load LLaMA-3.2-11B-Vision model and tokenizer
+# Function to load LLaMA-3.2-11B-Vision model and tokenizer synchronously
 def load_llama_vision_model():
     global model, tokenizer
     if model is None or tokenizer is None:
@@ -41,22 +41,22 @@ def load_llama_vision_model():
             model_name, 
             torch_dtype=torch.bfloat16,  # Use bfloat16 for reduced memory usage
             device_map="auto"  # Automatically handle multi-GPU setup
-        ).to(device)
-
-        # Add a proper pad token if it's not available
+        )
+        model.to(device)
         if tokenizer.pad_token is None:
             tokenizer.add_special_tokens({'pad_token': '[PAD]'})
             model.resize_token_embeddings(len(tokenizer))
 
-# Function to load Stable Diffusion pipeline
+# Function to load Stable Diffusion pipeline synchronously
 def load_stable_diffusion():
     global pipe
     if pipe is None:
         print("Loading Stable Diffusion pipeline...")
         pipe = StableDiffusionPipeline.from_pretrained(
-            stable_diffusion_model_name, 
+            stable_diffusion_model_name,
             torch_dtype=torch.float16  # Use FP16 for speed and memory efficiency
-        ).to(device)
+        )
+        pipe.to(device)
 
 # Define input model for FastAPI
 class PromptRequest(BaseModel):
@@ -65,8 +65,10 @@ class PromptRequest(BaseModel):
 # Event handler to load models on startup
 @app.on_event("startup")
 async def startup_event():
-    load_llama_vision_model()     # Load LLaMA-3.2-11B-Vision model and tokenizer at startup
-    load_stable_diffusion()       # Load Stable Diffusion model at startup
+    print(f"Running on {'GPU' if torch.cuda.is_available() else 'CPU'}")
+    # Run the synchronous model loading functions in separate threads
+    await asyncio.to_thread(load_llama_vision_model)
+    await asyncio.to_thread(load_stable_diffusion)
     print("Models loaded successfully at startup.")
 
 # Function to generate response following OpenAI JSON format
@@ -90,10 +92,14 @@ def format_openai_response(generated_text, model_name):
 @app.post("/direct/")
 async def generate_text(request: PromptRequest):
     # Tokenize input with padding and truncation
-    inputs = tokenizer(request.prompt, return_tensors="pt", padding=True, truncation=True)
+    inputs = await asyncio.to_thread(
+        tokenizer, request.prompt, return_tensors="pt", padding=True, truncation=True
+    )
     inputs = {key: value.to(device) for key, value in inputs.items()}
 
-    outputs = model.generate(
+    # Generate outputs
+    outputs = await asyncio.to_thread(
+        model.generate,
         inputs['input_ids'],
         max_new_tokens=20,      # Generate up to 20 new tokens
         pad_token_id=tokenizer.pad_token_id,
@@ -104,17 +110,24 @@ async def generate_text(request: PromptRequest):
         repetition_penalty=1.2   # Penalize repetition for more diverse outputs
     )
 
-    response_text = tokenizer.decode(outputs[0], skip_special_tokens=True)
+    # Decode the generated tokens
+    response_text = await asyncio.to_thread(
+        tokenizer.decode, outputs[0], skip_special_tokens=True
+    )
     return format_openai_response(response_text, model_name)
 
 # POST endpoint for more creative responses
 @app.post("/creative/")
 async def generate_creative_text(request: PromptRequest):
     # Tokenize input with padding and truncation
-    inputs = tokenizer(request.prompt, return_tensors="pt", padding=True, truncation=True)
+    inputs = await asyncio.to_thread(
+        tokenizer, request.prompt, return_tensors="pt", padding=True, truncation=True
+    )
     inputs = {key: value.to(device) for key, value in inputs.items()}
 
-    outputs = model.generate(
+    # Generate outputs
+    outputs = await asyncio.to_thread(
+        model.generate,
         inputs['input_ids'],
         max_new_tokens=200,     # Generate up to 200 new tokens
         pad_token_id=tokenizer.pad_token_id,
@@ -125,7 +138,10 @@ async def generate_creative_text(request: PromptRequest):
         repetition_penalty=1.2
     )
 
-    response_text = tokenizer.decode(outputs[0], skip_special_tokens=True)
+    # Decode the generated tokens
+    response_text = await asyncio.to_thread(
+        tokenizer.decode, outputs[0], skip_special_tokens=True
+    )
     return format_openai_response(response_text, model_name)
 
 # Define the endpoint for image generation using Stable Diffusion
@@ -139,7 +155,7 @@ async def generate_image(request: PromptRequest):
     image_path = f"/app/{image_filename}"
 
     # Save the image to the generated path
-    image.save(image_path)
+    await asyncio.to_thread(image.save, image_path)
 
     return {
         "id": str(uuid.uuid4()),
@@ -153,10 +169,10 @@ async def generate_image(request: PromptRequest):
 @app.post("/generate_image_to_text/")
 async def generate_image_to_text(request: PromptRequest):
     processor = BlipProcessor.from_pretrained(model_name)
-    inputs = processor(request.prompt, return_tensors="pt").to(device)
+    inputs = await asyncio.to_thread(processor, request.prompt, return_tensors="pt")
+    inputs = {key: value.to(device) for key, value in inputs.items()}
 
-    # Generate text from the image input
-    outputs = model.generate(**inputs)
-    response_text = processor.decode(outputs[0], skip_special_tokens=True)
+    outputs = await asyncio.to_thread(model.generate, **inputs)
+    response_text = await asyncio.to_thread(processor.decode, outputs[0], skip_special_tokens=True)
 
     return format_openai_response(response_text, model_name)
