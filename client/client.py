@@ -1,6 +1,6 @@
 import requests
 
-API_URL = "http://localhost:8080/generate/"
+API_URL = ""
 
 def send_prompt(prompt):
     try:

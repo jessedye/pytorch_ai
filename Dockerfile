@@ -25,28 +25,13 @@ RUN apt-get install -y --no-install-recommends \
 # Copy requirements.txt
 COPY src/requirements.txt ./
 
-# Install dependencies from requirements.txt
+# Install the rest of the dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy the rest of the application
 COPY src/ .
 
-
-
-
-# Install PyTorch with CUDA separately
-RUN pip install torch torchvision torchaudio --extra-index-url https://download.pytorch.org/whl/cu118
-#CPU only
-RUN pip install torch torchvision torchaudio --extra-index-url https://download.pytorch.org/whl/cpu
-
-
-RUN pip install -r requirements.txt
-# copy app source
-COPY src /app
-
 EXPOSE 8080
-
-RUN ls -lsa
 
 # Set the entry point or default command
 CMD ["uvicorn", "ai:app", "--host", "0.0.0.0", "--port", "8080"]

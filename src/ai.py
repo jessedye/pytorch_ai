@@ -4,7 +4,7 @@ from pydantic import BaseModel
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from diffusers import StableDiffusionPipeline
 import os
-
+import uuid
 app = FastAPI()
 
 # Model names
@@ -53,7 +53,7 @@ async def startup_event():
     print("Models loaded successfully at startup.")
 
 # Define the generate endpoint for text generation
-@app.post("/generate/")
+@app.post("/direct/")
 async def generate_text(request: PromptRequest):
     # Tokenize input with padding and truncation
     inputs = tokenizer(request.prompt, return_tensors="pt", padding=True, truncation=True)
@@ -61,13 +61,34 @@ async def generate_text(request: PromptRequest):
 
     outputs = model.generate(
         inputs['input_ids'],
-        max_new_tokens=200,      # Generate up to 200 new tokens
+        max_new_tokens=20,      # Generate up to 200 new tokens
         pad_token_id=tokenizer.pad_token_id,
         do_sample=True,
-        temperature=0.7,         # Randomness for creative outputs
+        temperature=0.3,         # Randomness for creative outputs
         top_k=50,                # Consider top 50 tokens
         top_p=0.9,               # Sample from 90% of the probability distribution
         repetition_penalty=1.2   # Penalize repetition for more diverse outputs
+    )
+
+    response_text = tokenizer.decode(outputs[0], skip_special_tokens=True)
+    return {"response": response_text}
+
+# POST endpoint for more creative responses
+@app.post("/creative/")
+async def generate_creative_text(request: PromptRequest):
+    # Tokenize input with padding and truncation
+    inputs = tokenizer(request.prompt, return_tensors="pt", padding=True, truncation=True)
+    inputs = {key: value.to(device) for key, value in inputs.items()}
+
+    outputs = model.generate(
+        inputs['input_ids'],
+        max_new_tokens=200,     # Generate up to 200 new tokens
+        pad_token_id=tokenizer.pad_token_id,
+        do_sample=True,
+        temperature=0.7,        # Higher temperature for creative output
+        top_k=50,
+        top_p=0.9,
+        repetition_penalty=1.2
     )
 
     response_text = tokenizer.decode(outputs[0], skip_special_tokens=True)
@@ -79,8 +100,11 @@ async def generate_image(request: PromptRequest):
     # Generate image from the prompt
     image = pipe(request.prompt).images[0]
 
-    # Save image to a file (in-memory saving can also be done)
-    image_path = f"/app/generated_image.png"
+    # Create a unique filename using uuid
+    image_filename = f"{uuid.uuid4()}.png"
+    image_path = f"/app/{image_filename}"
+
+    # Save the image to the generated path
     image.save(image_path)
 
     return {"image_path": image_path}
