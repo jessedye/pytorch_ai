@@ -3,7 +3,7 @@ import argparse
 
 def send_prompt(api_url, prompt):
     try:
-        # Correct JSON format with the prompt field
+        # Prepare the JSON payload with the prompt
         payload = {
             "prompt": prompt
         }
@@ -17,16 +17,23 @@ def send_prompt(api_url, prompt):
         # Parse the response JSON
         result = response.json()
 
-        # Return the generated text
-        return result.get("response", "No response generated.")
-    
+        # Check for OpenAI-style text response structure
+        if "choices" in result and len(result["choices"]) > 0:
+            return result["choices"][0].get("text", "No text found")
+        # Check for image response
+        elif "image_path" in result:
+            image_url = result["image_path"]
+            return f"Image URL: {image_url}"
+        else:
+            return "No valid response generated."
+
     except requests.exceptions.RequestException as e:
         return f"Error: {e}"
 
 if __name__ == "__main__":
     # Set up argument parser
     parser = argparse.ArgumentParser(description="Send prompts to an AI API.")
-    parser.add_argument('--api-url', type=str, default="https://elder-brain-api.dev.aquia-k8s-lab.net/direct/", 
+    parser.add_argument('--api-url', type=str, default="DOMAIN.com", 
                         help="The API URL to send the prompt to")
     parser.add_argument('--prompt', type=str, default=None, help="The prompt to send to the API")
 

@@ -21,20 +21,14 @@ else:
 
 app = FastAPI()
 
-# Allow CORS for specific domains
-origins = [
-    "https://elder-brain.dev.aquia-k8s-lab.net",  # Allow requests from your frontend
-    "http://localhost",  # Allow localhost during development
-    "http://localhost:3000",  # Or any port your frontend uses locally
-]
+from fastapi.middleware.cors import CORSMiddleware
 
-# Add CORS middleware to allow requests from frontend
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,  # Only allow specific origins
+    allow_origins=["*"],  # Allow all origins
     allow_credentials=True,
-    allow_methods=["*"],  # Allow all methods (GET, POST, etc.)
-    allow_headers=["*"],  # Allow all headers
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 # Serve images from the /app/img directory
@@ -248,7 +242,7 @@ async def generate_image(request: PromptRequest):
         "object": "image_generation",
         "created": int(time.time()),
         "model": stable_diffusion_model_name,
-        "image_url": f"/app/img/{image_filename}"
+        "image_url": f"/img/{image_filename}"
     }
 
 # Define the endpoint for image-to-text generation using LLaMA Vision
