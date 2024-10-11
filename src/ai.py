@@ -152,10 +152,15 @@ async def generate_image(request: PromptRequest):
 
     # Create a unique filename using uuid
     image_filename = f"{uuid.uuid4()}.png"
-    image_path = f"/app/{image_filename}"
+    
+    # Ensure the /app/ directory exists, or use current working directory
+    image_dir = "/app/"
+    if not os.path.exists(image_dir):
+        os.makedirs(image_dir)
+    image_path = os.path.join(image_dir, image_filename)
 
     # Save the image to the generated path
-    await asyncio.to_thread(image.save, image_path)
+    image.save(image_path)
 
     return {
         "id": str(uuid.uuid4()),
