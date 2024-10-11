@@ -9,7 +9,8 @@ diffusers==0.30.3
 pillow==10.4.0
 reportlab==4.2.5
 bitsandbytes==0.44.1
-fastapi==0.115.0
+fastapi[all]==0.115.0
 uvicorn==0.31.0
 accelerate>=0.26.0
 huggingface_hub>=0.15.0
+aiofiles>=23.1.0

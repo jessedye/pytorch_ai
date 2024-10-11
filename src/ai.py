@@ -1,5 +1,6 @@
 import torch
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from transformers import AutoModelForCausalLM, AutoTokenizer, BlipProcessor
 from diffusers import StableDiffusionPipeline
@@ -18,6 +19,13 @@ else:
     raise EnvironmentError("HUGGINGFACE_TOKEN is not set in the environment.")
 
 app = FastAPI()
+
+# Serve images from the /app/img directory
+img_directory = "/app/img"
+if not os.path.exists(img_directory):
+    os.makedirs(img_directory)
+    
+app.mount("/img", StaticFiles(directory=img_directory), name="img")
 
 # Model names
 model_name = "meta-llama/Llama-3.2-11B-Vision"
@@ -101,10 +109,39 @@ async def generate_text(request: PromptRequest):
     outputs = await asyncio.to_thread(
         model.generate,
         inputs['input_ids'],
-        max_new_tokens=20,      # Generate up to 20 new tokens
+        max_new_tokens=200,      # Generate up to 100 new tokens
         pad_token_id=tokenizer.pad_token_id,
         do_sample=True,
-        temperature=0.3,         # Randomness for creative outputs
+        temperature=0.1,         # Randomness for creative outputs
+        top_k=50,                # Consider top 50 tokens
+        top_p=0.9,               # Sample from 90% of the probability distribution
+        repetition_penalty=1.2   # Penalize repetition for more diverse outputs
+    )
+
+    # Decode the generated tokens
+    response_text = await asyncio.to_thread(
+        tokenizer.decode, outputs[0], skip_special_tokens=True
+    )
+    return format_openai_response(response_text, model_name)
+
+
+# Define the generate endpoint for text generation
+@app.post("/direct_long/")
+async def generate_text(request: PromptRequest):
+    # Tokenize input with padding and truncation
+    inputs = await asyncio.to_thread(
+        tokenizer, request.prompt, return_tensors="pt", padding=True, truncation=True
+    )
+    inputs = {key: value.to(device) for key, value in inputs.items()}
+
+    # Generate outputs
+    outputs = await asyncio.to_thread(
+        model.generate,
+        inputs['input_ids'],
+        max_new_tokens=1000,      # Generate up to 100 new tokens
+        pad_token_id=tokenizer.pad_token_id,
+        do_sample=True,
+        temperature=0.1,         # Randomness for creative outputs
         top_k=50,                # Consider top 50 tokens
         top_p=0.9,               # Sample from 90% of the probability distribution
         repetition_penalty=1.2   # Penalize repetition for more diverse outputs
@@ -144,6 +181,35 @@ async def generate_creative_text(request: PromptRequest):
     )
     return format_openai_response(response_text, model_name)
 
+# POST endpoint for more creative long responses
+@app.post("/creative_long/")
+async def generate_creative_text(request: PromptRequest):
+    # Tokenize input with padding and truncation
+    inputs = await asyncio.to_thread(
+        tokenizer, request.prompt, return_tensors="pt", padding=True, truncation=True
+    )
+    inputs = {key: value.to(device) for key, value in inputs.items()}
+
+    # Generate outputs
+    outputs = await asyncio.to_thread(
+        model.generate,
+        inputs['input_ids'],
+        max_new_tokens=1000,     # Generate up to 1000 new tokens
+        pad_token_id=tokenizer.pad_token_id,
+        do_sample=True,
+        temperature=0.7,        # Higher temperature for creative  output
+        top_k=50,
+        top_p=0.9,
+        repetition_penalty=1.2
+    )
+
+    # Decode the generated tokens
+    response_text = await asyncio.to_thread(
+        tokenizer.decode, outputs[0], skip_special_tokens=True
+    )
+    return format_openai_response(response_text, model_name)
+
+
 # Define the endpoint for image generation using Stable Diffusion
 @app.post("/generate_image/")
 async def generate_image(request: PromptRequest):
@@ -153,10 +219,8 @@ async def generate_image(request: PromptRequest):
     # Create a unique filename using uuid
     image_filename = f"{uuid.uuid4()}.png"
     
-    # Ensure the /app/ directory exists, or use current working directory
-    image_dir = "/app/"
-    if not os.path.exists(image_dir):
-        os.makedirs(image_dir)
+    # Ensure the /app/img/ directory exists
+    image_dir = img_directory
     image_path = os.path.join(image_dir, image_filename)
 
     # Save the image to the generated path
@@ -167,7 +231,7 @@ async def generate_image(request: PromptRequest):
         "object": "image_generation",
         "created": int(time.time()),
         "model": stable_diffusion_model_name,
-        "image_path": image_path
+        "image_url": f"/app/img/{image_filename}"
     }
 
 # Define the endpoint for image-to-text generation using LLaMA Vision
