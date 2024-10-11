@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI Chat Interface</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      background-color: #f4f4f4;
+    }
+    #chat-container {
+      background: white;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+      width: 400px;
+    }
+    #prompt-input {
+      width: 100%;
+      padding: 10px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      margin-bottom: 10px;
+    }
+    #api-route {
+      width: 100%;
+      padding: 10px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      margin-bottom: 10px;
+    }
+    #send-button {
+      width: 100%;
+      padding: 10px;
+      background-color: #007BFF;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    #send-button:hover {
+      background-color: #0056b3;
+    }
+    #response-container {
+      margin-top: 20px;
+    }
+    #response-text, #response-image {
+      white-space: pre-wrap;
+      word-wrap: break-word;
+    }
+  </style>
+</head>
+<body>
+  <div id="chat-container">
+    <h2>AI Chat Interface</h2>
+    <textarea id="prompt-input" rows="4" placeholder="Enter your prompt here..."></textarea>
+    <select id="api-route">
+      <option value="direct">Direct Response</option>
+      <option value="direct_long">Direct Long Response</option>
+      <option value="creative">Creative Response</option>
+      <option value="creative_long">Creative Long Response</option>
+      <option value="generate_image">Generate Image</option>
+    </select>
+    <button id="send-button">Send</button>
+    
+    <div id="response-container">
+      <p id="response-text"></p>
+      <img id="response-image" style="display:none;" />
+    </div>
+  </div>
+
+  <script>
+    document.getElementById('send-button').addEventListener('click', async () => {
+      const prompt = document.getElementById('prompt-input').value;
+      const route = document.getElementById('api-route').value;
+      const apiUrl = `https://elder-brain-api.dev.aquia-k8s-lab.net/${route}`;
+      
+      if (!prompt) {
+        alert("Please enter a prompt.");
+        return;
+      }
+
+      try {
+        const response = await fetch(apiUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ prompt })
+        });
+
+        if (!response.ok) {
+          throw new Error('Failed to fetch response from API.');
+        }
+
+        const result = await response.json();
+        const responseContainer = document.getElementById('response-container');
+        const responseText = document.getElementById('response-text');
+        const responseImage = document.getElementById('response-image');
+        
+        responseText.innerText = '';  // Clear previous responses
+        responseImage.style.display = 'none';
+        
+        if (route === 'generate_image') {
+          const imagePath = result.image_path;
+          responseImage.src = imagePath;
+          responseImage.style.display = 'block';  // Show the image
+        } else {
+          responseText.innerText = result.choices[0].text;
+        }
+      } catch (error) {
+        alert("Error: " + error.message);
+      }
+    });
+  </script>
+</body>
+</html>

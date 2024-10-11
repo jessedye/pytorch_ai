@@ -31,6 +31,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy the rest of the application
 COPY src/ .
 
+RUN mkdir /app/img
+
 EXPOSE 8080
 
 # Set the entry point or default command

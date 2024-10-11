@@ -1,5 +1,6 @@
 import torch
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware  # Import CORS middleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from transformers import AutoModelForCausalLM, AutoTokenizer, BlipProcessor
@@ -19,6 +20,22 @@ else:
     raise EnvironmentError("HUGGINGFACE_TOKEN is not set in the environment.")
 
 app = FastAPI()
+
+# Allow CORS for specific domains
+origins = [
+    "https://elder-brain.dev.aquia-k8s-lab.net",  # Allow requests from your frontend
+    "http://localhost",  # Allow localhost during development
+    "http://localhost:3000",  # Or any port your frontend uses locally
+]
+
+# Add CORS middleware to allow requests from frontend
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,  # Only allow specific origins
+    allow_credentials=True,
+    allow_methods=["*"],  # Allow all methods (GET, POST, etc.)
+    allow_headers=["*"],  # Allow all headers
+)
 
 # Serve images from the /app/img directory
 img_directory = "/app/img"
